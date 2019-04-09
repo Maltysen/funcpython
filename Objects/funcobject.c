@@ -645,11 +645,19 @@ static PyObject *
 partialfunction_call(PyObject *pf, PyObject *args, PyObject *kwargs)
 {
     PyObject **stack;
-    Py_ssize_t nargs;
+	PyObject *tempargs;
+    Py_ssize_t nargs, npargs;
 
-    stack = _PyTuple_ITEMS(args);
-    nargs = PyTuple_GET_SIZE(args);
-    return _PyFunction_FastCallDict(((partialfunction *) pf)->pf_callable, stack, nargs, kwargs);
+	npargs = PyTuple_GET_SIZE(((partialfunction*)pf)->pf_args);
+	nargs = PyTuple_GET_SIZE(args);
+
+	tempargs = PyTuple_New(npargs+nargs);
+	int i;
+	for (i=0;i<npargs;i++) PyTuple_SetItem(tempargs, i, PyTuple_GetItem(((partialfunction*)pf)->pf_args, i));
+	for (i=0;i<nargs;i++) PyTuple_SetItem(tempargs, npargs+i, PyTuple_GetItem(args, i));
+
+    stack = _PyTuple_ITEMS(tempargs);
+    return _PyFunction_FastCallDict(((partialfunction *) pf)->pf_callable, stack, nargs+npargs, kwargs);
 }
 
 PyTypeObject PyPartialFunction_Type = {
@@ -707,30 +715,19 @@ PyPartialFunction_New(PyObject *callable)
     return (PyObject *)pf;
 }
 
-
-
 //static PyMethodDef papplied_func_ml = {"blablha", (PyCFunction)(void(*)(void)) papplied_func, METH_VARARGS|METH_KEYWORDS, "mydocdick"};
 
 static PyObject *
 func_richcompare(PyObject *self, PyObject *other, int op) {
 	if (op==Py_LT || op==Py_GT) {
-		/*PyObject *pfunc = PyCFunction_New(&papplied_func_ml, NULL);
-		printf("%p\n\n", PyErr_Occurred());
-		printf("dict: %p\n\n", PyObject_GetAttrString(pfunc, "__dict__"));
-		PyObject_SetAttrString(PyObject_GetAttrString(pfunc, "__dict__"), "__innerfunc", self);
-		//printf("%s\n\n", ((PyExc_AttributeError*)PyErr_Occurred())->tp_name);
-		PyObject* ptype;
-		PyObject* pvalue;
-		PyObject* ptraceback;	
-		//PyErr_Fetch(&ptype, &pvalue, &ptraceback);
-		//printf("%s\n\n", PyBytes_AS_STRING(PyUnicode_AsEncodedString(PyObject_Repr(pvalue), "utf-8", "error")));
-
-		PyObject_SetAttrString(pfunc, "__arg_to_apply", other);
-
-		printf("%p\n\n", PyErr_Occurred());
-		return pfunc;*/
-
 		PyObject *pf = PyPartialFunction_New(self);
+
+		if (PyTuple_Check(other)) {
+			((partialfunction *)pf)->pf_args = other;
+		} else {
+			((partialfunction *)pf)->pf_args = PyTuple_Pack(1, other);
+		}
+		Py_INCREF(((partialfunction *)pf)->pf_args);
 		return pf;
 	}
 	Py_RETURN_NOTIMPLEMENTED;
