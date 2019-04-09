@@ -603,6 +603,143 @@ func_descr_get(PyObject *func, PyObject *obj, PyObject *type)
     return PyMethod_New(func, obj);
 }
 
+/* Partial GAYYY */
+
+typedef struct {
+    PyObject_HEAD
+    PyObject *pf_callable;
+    PyObject *pf_args;
+    PyObject *pf_kwargs;
+} partialfunction;
+
+static void
+pf_dealloc(partialfunction *pf)
+{
+    _PyObject_GC_UNTRACK((PyObject *)pf);
+    Py_XDECREF(pf->pf_callable);
+    Py_XDECREF(pf->pf_args);
+    Py_XDECREF(pf->pf_kwargs);
+    Py_TYPE(pf)->tp_free((PyObject *)pf);
+}
+
+static int
+pf_traverse(partialfunction *pf, visitproc visit, void *arg)
+{
+    Py_VISIT(pf->pf_callable);
+    Py_VISIT(pf->pf_args);
+    Py_VISIT(pf->pf_kwargs);
+    return 0;
+}
+
+static int
+pf_clear(partialfunction *pf)
+{
+    Py_CLEAR(pf->pf_callable);
+    Py_CLEAR(pf->pf_args);
+    Py_CLEAR(pf->pf_kwargs);
+    return 0;
+}
+
+//TODO actuall partial
+static PyObject *
+partialfunction_call(PyObject *pf, PyObject *args, PyObject *kwargs)
+{
+    PyObject **stack;
+    Py_ssize_t nargs;
+
+    stack = _PyTuple_ITEMS(args);
+    nargs = PyTuple_GET_SIZE(args);
+    return _PyFunction_FastCallDict(((partialfunction *) pf)->pf_callable, stack, nargs, kwargs);
+}
+
+PyTypeObject PyPartialFunction_Type = {
+    PyVarObject_HEAD_INIT(&PyType_Type, 0)
+    "partialfunction",
+    sizeof(partialfunction),
+    0,
+    (destructor)pf_dealloc,                     /* tp_dealloc */
+    0,                                          /* tp_print */
+    0,                                          /* tp_getattr */
+    0,                                          /* tp_setattr */
+    0,                                          /* tp_reserved */
+    0,                                          /* tp_repr -- TODO to fill in */
+    0,                                          /* tp_as_number */
+    0,                                          /* tp_as_sequence */
+    0,                                          /* tp_as_mapping */
+    0,                                          /* tp_hash */
+    partialfunction_call,                       /* tp_call */
+    0,                                          /* tp_str */
+    0,                                          /* tp_getattro */
+    0,                                          /* tp_setattro */
+    0,                                          /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
+    0,                            /* tp_doc --TODO */
+    (traverseproc)pf_traverse,                  /* tp_traverse */
+    (inquiry)pf_clear,                          /* tp_clear */
+    0,                                          /* tp_richcompare --TODO?*/
+    0,                                          /* tp_weaklistoffset --TODO: wtf is anus here? */
+    0,                                          /* tp_iter */
+    0,                                          /* tp_iternext */
+    0,                                          /* tp_methods */
+    0,              /* tp_members --TODO consider putting into dict instead of struct */
+    0,                              /* tp_getset --TODO consider putting into dict instead of struct. then need to fix other tp_ too*/
+    0,                                          /* tp_base */
+    0,                                          /* tp_dict */
+    0,                               		/* tp_descr_get */
+    0,                                          /* tp_descr_set */
+    0,				                /* tp_dictoffset */
+    0,                                          /* tp_init */
+    PyType_GenericAlloc,                        /* tp_alloc */
+    0,                          /* tp_new */
+    PyObject_GC_Del,                            /* tp_free */
+};
+
+
+PyObject *
+PyPartialFunction_New(PyObject *callable)
+{
+    partialfunction *pf = (partialfunction *)
+        PyType_GenericAlloc(&PyPartialFunction_Type, 0);
+    if (pf != NULL) {
+        Py_INCREF(callable);
+        pf->pf_callable = callable;
+    }
+    return (PyObject *)pf;
+}
+
+
+
+//static PyMethodDef papplied_func_ml = {"blablha", (PyCFunction)(void(*)(void)) papplied_func, METH_VARARGS|METH_KEYWORDS, "mydocdick"};
+
+static PyObject *
+func_richcompare(PyObject *self, PyObject *other, int op) {
+	if (op==Py_LT || op==Py_GT) {
+		/*PyObject *pfunc = PyCFunction_New(&papplied_func_ml, NULL);
+		printf("%p\n\n", PyErr_Occurred());
+		printf("dict: %p\n\n", PyObject_GetAttrString(pfunc, "__dict__"));
+		PyObject_SetAttrString(PyObject_GetAttrString(pfunc, "__dict__"), "__innerfunc", self);
+		//printf("%s\n\n", ((PyExc_AttributeError*)PyErr_Occurred())->tp_name);
+		PyObject* ptype;
+		PyObject* pvalue;
+		PyObject* ptraceback;	
+		//PyErr_Fetch(&ptype, &pvalue, &ptraceback);
+		//printf("%s\n\n", PyBytes_AS_STRING(PyUnicode_AsEncodedString(PyObject_Repr(pvalue), "utf-8", "error")));
+
+		PyObject_SetAttrString(pfunc, "__arg_to_apply", other);
+
+		printf("%p\n\n", PyErr_Occurred());
+		return pfunc;*/
+
+		PyObject *pf = PyPartialFunction_New(self);
+		return pf;
+	}
+	Py_RETURN_NOTIMPLEMENTED;
+}
+
+static long func_hash(PyObject *o) {
+	return 17; //figure this shit out at some point
+}
+
 PyTypeObject PyFunction_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "function",
@@ -617,7 +754,7 @@ PyTypeObject PyFunction_Type = {
     0,                                          /* tp_as_number */
     0,                                          /* tp_as_sequence */
     0,                                          /* tp_as_mapping */
-    0,                                          /* tp_hash */
+    func_hash,                                  /* tp_hash */
     function_call,                              /* tp_call */
     0,                                          /* tp_str */
     0,                                          /* tp_getattro */
@@ -627,7 +764,7 @@ PyTypeObject PyFunction_Type = {
     func_new__doc__,                            /* tp_doc */
     (traverseproc)func_traverse,                /* tp_traverse */
     (inquiry)func_clear,                        /* tp_clear */
-    0,                                          /* tp_richcompare */
+    func_richcompare,                           /* tp_richcompare */
     offsetof(PyFunctionObject, func_weakreflist), /* tp_weaklistoffset */
     0,                                          /* tp_iter */
     0,                                          /* tp_iternext */
@@ -643,7 +780,6 @@ PyTypeObject PyFunction_Type = {
     0,                                          /* tp_alloc */
     func_new,                                   /* tp_new */
 };
-
 
 /* Class method object */
 
