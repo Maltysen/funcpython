@@ -644,20 +644,14 @@ pf_clear(partialfunction *pf)
 static PyObject *
 partialfunction_call(PyObject *pf, PyObject *args, PyObject *kwargs)
 {
-    PyObject **stack;
-	PyObject *tempargs;
-    Py_ssize_t nargs, npargs;
+	Py_ssize_t npargs = PyTuple_GET_SIZE(((partialfunction*)pf)->pf_args);
+	Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+	PyObject *combined_args = PyTuple_New(npargs+nargs);
+	for (int i=0;i<npargs;i++) PyTuple_SetItem(combined_args, i, PyTuple_GetItem(((partialfunction*)pf)->pf_args, i));
+	for (int i=0;i<nargs;i++) PyTuple_SetItem(combined_args, npargs+i, PyTuple_GetItem(args, i));
 
-	npargs = PyTuple_GET_SIZE(((partialfunction*)pf)->pf_args);
-	nargs = PyTuple_GET_SIZE(args);
-
-	tempargs = PyTuple_New(npargs+nargs);
-	int i;
-	for (i=0;i<npargs;i++) PyTuple_SetItem(tempargs, i, PyTuple_GetItem(((partialfunction*)pf)->pf_args, i));
-	for (i=0;i<nargs;i++) PyTuple_SetItem(tempargs, npargs+i, PyTuple_GetItem(args, i));
-
-    stack = _PyTuple_ITEMS(tempargs);
-    return _PyFunction_FastCallDict(((partialfunction *) pf)->pf_callable, stack, nargs+npargs, kwargs);
+	PyObject *callable = ((partialfunction*)pf)->pf_callable;
+	return Py_TYPE(callable)->tp_call(callable, combined_args, kwargs);
 }
 
 PyTypeObject PyPartialFunction_Type = {
@@ -717,8 +711,9 @@ PyPartialFunction_New(PyObject *callable)
 
 //static PyMethodDef papplied_func_ml = {"blablha", (PyCFunction)(void(*)(void)) papplied_func, METH_VARARGS|METH_KEYWORDS, "mydocdick"};
 
-static PyObject *
-func_richcompare(PyObject *self, PyObject *other, int op) {
+PyObject *
+PyFunction_PartialApplication(PyObject *self, PyObject *other, int op)
+{
 	if (op==Py_LT || op==Py_GT) {
 		PyObject *pf = PyPartialFunction_New(self);
 
@@ -761,7 +756,7 @@ PyTypeObject PyFunction_Type = {
     func_new__doc__,                            /* tp_doc */
     (traverseproc)func_traverse,                /* tp_traverse */
     (inquiry)func_clear,                        /* tp_clear */
-    func_richcompare,                           /* tp_richcompare */
+    PyFunction_PartialApplication,              /* tp_richcompare */
     offsetof(PyFunctionObject, func_weakreflist), /* tp_weaklistoffset */
     0,                                          /* tp_iter */
     0,                                          /* tp_iternext */

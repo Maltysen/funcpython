@@ -226,6 +226,10 @@ meth_richcompare(PyObject *self, PyObject *other, int op)
     PyObject *res;
     int eq;
 
+	if (op==Py_LT) {
+		return PyFunction_PartialApplication(self, other, op);
+	}
+
     if ((op != Py_EQ && op != Py_NE) ||
         !PyCFunction_Check(self) ||
         !PyCFunction_Check(other))
